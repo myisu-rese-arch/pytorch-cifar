@@ -89,11 +89,8 @@ else:
     MEAN = (0.485, 0.456, 0.406)
     STD = (0.229, 0.224, 0.225)
 
-MEAN = MEAN * 255
-STD = STD * 255
-
-MEAN = list(MEAN)
-STD = list(STD)
+MEAN = [255 * x for x in MEAN]
+STD = [255 * x for x in STD]
 
 BATCH_SIZE = config.batch_size
 
