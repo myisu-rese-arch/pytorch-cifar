@@ -12,6 +12,7 @@ import argparse
 
 from models import *
 from utils import progress_bar
+import config as config
 
 import torch as ch
 import time
@@ -40,11 +41,27 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-trainset = torchvision.datasets.CIFAR10(
-    root='./data', train=True, download=True)
+if config.dataset == 'CIFAR10':
+    root = './data_cifar10'
+    trainset = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True)
 
-testset = torchvision.datasets.CIFAR10(
-    root='./data', train=False, download=True)
+    testset = torchvision.datasets.CIFAR10(
+        root=root, train=False, download=True)
+elif config.dataset == 'CIFAR100':
+    root = './data_cifar100'
+    trainset = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True)
+
+    testset = torchvision.datasets.CIFAR100(
+        root=root, train=False, download=True)
+else:
+    root = './data_imagenet'
+    trainset = torchvision.datasets.ImageNet(
+        root=root, train=True, download=True)
+
+    testset = torchvision.datasets.ImageNet(
+        root=root, train=False, download=True)
 
 datasets = {
 	'train': trainset,
@@ -59,10 +76,26 @@ for (name, ds) in datasets.items():
     writer.from_indexed_dataset(ds)
 
 # Note that statistics are wrt to uin8 range, [0,255].
-CIFAR_MEAN = [125.307, 122.961, 113.8575]
-CIFAR_STD = [51.5865, 50.847, 51.255]
+# CIFAR_MEAN = [125.307, 122.961, 113.8575]
+# CIFAR_STD = [51.5865, 50.847, 51.255]
 
-BATCH_SIZE = 512
+if config.dataset == 'CIFAR10':
+    MEAN = (0.4914, 0.4822, 0.4465)
+    STD = (0.2023, 0.1994, 0.2010)
+elif config.dataset == 'CIFAR100':
+    MEAN = (0.5071, 0.4867, 0.4408)
+    STD = (0.2675, 0.2565, 0.2761)
+else:
+    MEAN = (0.485, 0.456, 0.406)
+    STD = (0.229, 0.224, 0.225)
+
+MEAN = MEAN * 255
+STD = STD * 255
+
+MEAN = list(MEAN)
+STD = list(STD)
+
+BATCH_SIZE = config.batch_size
 
 loaders = {}
 
@@ -144,7 +177,7 @@ for name in ['train', 'test']:
         ToDevice('cuda:0', non_blocking=True),
         ToTorchImage(),
         Convert(ch.float16),
-        torchvision.transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        torchvision.transforms.Normalize(MEAN, STD),
     ])
 
     # Create loaders
@@ -159,14 +192,11 @@ for name in ['train', 'test']:
 
 trainloader = loaders['train']
 testloader = loaders['test']
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
 
-orig_stdout = sys.stdout
 f = open('main.txt', 'w')
-sys.stdout = f
-for i in range(10):
+for i in range(config.trials):
     # Model
+    best_acc = 0  # best test accuracy
     print('==> Building model..')
     net = ResNet18()
     net = net.to(memory_format=torch.channels_last).cuda()
@@ -194,7 +224,5 @@ for i in range(10):
         train(epoch)
         test(epoch)
         scheduler.step()
-
-    print("Training finished at: ", (time.time() - starttime))
-sys.stdout = orig_stdout
+    print(f"Training finished at: {(time.time() - starttime)} with accuracy: {best_acc}", f)
 f.close()
