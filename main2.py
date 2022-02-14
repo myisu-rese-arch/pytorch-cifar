@@ -87,12 +87,15 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 if config.dataset == 'CIFAR10':
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2023, 0.1994, 0.2010)
+    num_classes = 10
 elif config.dataset == 'CIFAR100':
     mean = (0.5071, 0.4867, 0.4408)
     std = (0.2675, 0.2565, 0.2761)
+    num_classes = 100
 else:
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
+    num_classes = 1000
 
 # Data
 print('==> Preparing data..')
@@ -141,7 +144,7 @@ for i in range(config.trials):
     # Model
     best_acc = 0  # best test accuracy
     print('==> Building model..')
-    net = ResNet18()
+    net = ResNet18(num_classes)
     net = net.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)

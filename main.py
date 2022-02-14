@@ -82,12 +82,15 @@ for (name, ds) in datasets.items():
 if config.dataset == 'CIFAR10':
     MEAN = (0.4914, 0.4822, 0.4465)
     STD = (0.2023, 0.1994, 0.2010)
+    num_classes = 10
 elif config.dataset == 'CIFAR100':
     MEAN = (0.5071, 0.4867, 0.4408)
     STD = (0.2675, 0.2565, 0.2761)
+    num_classes = 100
 else:
     MEAN = (0.485, 0.456, 0.406)
     STD = (0.229, 0.224, 0.225)
+    num_classes = 1000
 
 MEAN = [255 * x for x in MEAN]
 STD = [255 * x for x in STD]
@@ -195,7 +198,7 @@ for i in range(config.trials):
     # Model
     best_acc = 0  # best test accuracy
     print('==> Building model..')
-    net = ResNet18()
+    net = ResNet18(num_classes)
     net = net.to(memory_format=torch.channels_last).cuda()
 
     if device == 'cuda':
