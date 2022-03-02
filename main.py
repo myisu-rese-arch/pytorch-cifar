@@ -4,32 +4,16 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
+
 import torchvision
 import torchvision.transforms as transforms
 
-import os, sys
+import os, sys, time
 import argparse
 
 from models import *
 from utils import progress_bar
 import config as config
-
-import torch as ch
-import time
-from typing import List
-from ffcv.fields import IntField, RGBImageField
-from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder
-from ffcv.loader import Loader, OrderOption
-from ffcv.pipeline.operation import Operation
-from ffcv.transforms import RandomHorizontalFlip, Cutout, RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage
-from ffcv.transforms.common import Squeeze
-from ffcv.writer import DatasetWriter
-
-from tqdm import tqdm
-from  torch.cuda.amp import autocast
-from ffcv.pipeline.operation import Operation
-from ffcv.pipeline.allocation_query import AllocationQuery
-from dataclasses import replace
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -41,64 +25,6 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-if config.dataset == 'CIFAR10':
-    root = './data_cifar10'
-    trainset = torchvision.datasets.CIFAR10(
-        root=root, train=True, download=True)
-
-    testset = torchvision.datasets.CIFAR10(
-        root=root, train=False, download=True)
-elif config.dataset == 'CIFAR100':
-    root = './data_cifar100'
-    trainset = torchvision.datasets.CIFAR100(
-        root=root, train=True, download=True)
-
-    testset = torchvision.datasets.CIFAR100(
-        root=root, train=False, download=True)
-else:
-    root = './data_imagenet'
-    trainset = torchvision.datasets.ImageNet(
-        root=root, train=True, download=True)
-
-    testset = torchvision.datasets.ImageNet(
-        root=root, train=False, download=True)
-
-datasets = {
-	'train': trainset,
-        'test': testset
-}
-
-for (name, ds) in datasets.items():
-    writer = DatasetWriter(f'./data/{name}.beton', {
-        'image': RGBImageField(),
-        'label': IntField()
-    })
-    writer.from_indexed_dataset(ds)
-
-# Note that statistics are wrt to uin8 range, [0,255].
-# CIFAR_MEAN = [125.307, 122.961, 113.8575]
-# CIFAR_STD = [51.5865, 50.847, 51.255]
-
-if config.dataset == 'CIFAR10':
-    MEAN = (0.4914, 0.4822, 0.4465)
-    STD = (0.2023, 0.1994, 0.2010)
-    num_classes = 10
-elif config.dataset == 'CIFAR100':
-    MEAN = (0.5071, 0.4867, 0.4408)
-    STD = (0.2675, 0.2565, 0.2761)
-    num_classes = 100
-else:
-    MEAN = (0.485, 0.456, 0.406)
-    STD = (0.229, 0.224, 0.225)
-    num_classes = 1000
-
-MEAN = [255 * x for x in MEAN]
-STD = [255 * x for x in STD]
-
-BATCH_SIZE = config.batch_size
-
-loaders = {}
-
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
@@ -106,14 +32,11 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        with autocast():
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
 
@@ -124,7 +47,10 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+    acc = 100.*correct/total
+    train_loss /= len(trainloader.dataset)
 
+    return acc, train_loss
 
 def test(epoch):
     global best_acc
@@ -135,9 +61,8 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            with autocast():
-                outputs = net(inputs)
-                loss = criterion(outputs, targets)
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
 
             test_loss += loss.item()
             _, predicted = outputs.max(1)
@@ -149,6 +74,7 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
+    test_loss /= len(testloader.dataset)
     if acc > best_acc:
         print('Saving..')
         state = {
@@ -161,46 +87,71 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-for name in ['train', 'test']:
-    label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice('cuda:0'), Squeeze()]
-    image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
-
-    # Add image transforms and normalization
-    if name == 'train':
-        image_pipeline.extend([
-            RandomHorizontalFlip(),
-            RandomTranslate(padding=2),
-            #Cutout(8, tuple(map(int, CIFAR_MEAN))), # Note Cutout is done before normalization.
-        ])
-    image_pipeline.extend([
-        ToTensor(),
-        ToDevice('cuda:0', non_blocking=True),
-        ToTorchImage(),
-        Convert(ch.float16),
-        torchvision.transforms.Normalize(MEAN, STD),
-    ])
-
-    # Create loaders
-    loaders[name] = Loader(f'./data/{name}.beton',
-                            batch_size=BATCH_SIZE,
-                            num_workers=2,
-                            order=OrderOption.RANDOM,
-                            drop_last=(name == 'train'),
-                            pipelines={'image': image_pipeline,
-                                       'label': label_pipeline})
+    return acc, test_loss
 
 
-trainloader = loaders['train']
-testloader = loaders['test']
+if config.dataset == 'CIFAR10':
+    mean = (0.4914, 0.4822, 0.4465)
+    std = (0.2023, 0.1994, 0.2010)
+    num_classes = 10
+elif config.dataset == 'CIFAR100':
+    mean = (0.5071, 0.4867, 0.4408)
+    std = (0.2675, 0.2565, 0.2761)
+    num_classes = 100
+else:
+    mean = (0.485, 0.456, 0.406)
+    std = (0.229, 0.224, 0.225)
+    num_classes = 1000
 
-f = open('main.txt', 'w')
+# Data
+print('==> Preparing data..')
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std),
+])
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std),
+])
+
+if config.dataset == 'CIFAR10':
+    root = './data_cifar10'
+    trainset = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform_train)
+
+    testset = torchvision.datasets.CIFAR10(
+        root=root, train=False, download=True, transform=transform_test)
+elif config.dataset == 'CIFAR100':
+    root = './data_cifar100'
+    trainset = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True, transform=transform_train)
+
+    testset = torchvision.datasets.CIFAR100(
+        root=root, train=False, download=True, transform=transform_test)
+else:
+    root = './data_imagenet'
+    trainset = torchvision.datasets.ImageNet(
+        root=root, train=True, download=True, transform=transform_train)
+
+    testset = torchvision.datasets.ImageNet(
+        root=root, train=False, download=True, transform=transform_test)
+
+trainloader = torch.utils.data.DataLoader(
+    trainset, batch_size=config.batch_size, shuffle=True, num_workers=2)
+
+testloader = torch.utils.data.DataLoader(
+    testset, batch_size=100, shuffle=False, num_workers=2)
+
+timings, accuracy = [], []
 for i in range(config.trials):
     # Model
     best_acc = 0  # best test accuracy
     print('==> Building model..')
     net = ResNet18(num_classes)
-    net = net.to(memory_format=torch.channels_last).cuda()
-
+    net = net.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
         cudnn.benchmark = True
@@ -220,9 +171,24 @@ for i in range(config.trials):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     starttime = time.time()
-    for epoch in range(start_epoch, start_epoch+200):
-        train(epoch)
-        test(epoch)
+    train_acc, train_loss = [], []
+    test_acc, test_loss = [], []
+    for epoch in range(start_epoch, start_epoch+config.EPOCHS):
+        tr_acc, tr_loss = train(epoch)
+        train_acc.append(tr_acc)
+        train_loss.append(tr_loss)
+
+        te_acc, te_loss = test(epoch)
+        test_acc.append(te_acc)
+        test_loss.append(te_loss)
+
         scheduler.step()
-    print(f"Training finished at: {(time.time() - starttime)} with accuracy: {best_acc}", f)
-f.close()
+    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = i)
+    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = i)
+
+    timing = time.time() - starttime
+    timings.append(timing)
+    accuracy.append(best_acc)
+
+    print(f"Training finished at: {(timing)} with accuracy: {best_acc}")
+config.write_list_to_csv(config.trials, 'tim_acc', timings, accuracy)
