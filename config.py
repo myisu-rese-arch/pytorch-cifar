@@ -3,7 +3,7 @@ import pandas as pd
 
 dataset = 'CIFAR10'
 batch_size = 256
-trials = 3
+trials = 5
 EPOCHS = 200
 output_name = "f2"
 

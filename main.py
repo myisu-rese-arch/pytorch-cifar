@@ -235,12 +235,12 @@ for i in range(config.trials):
         test_loss.append(te_loss)
 
         scheduler.step()
-    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = config.output_name +  + str(i))
-    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = config.output_name +  + str(i))
+    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = config.output_name + str(i))
+    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = config.output_name + str(i))
 
     timing = time.time() - starttime
     timings.append(timing)
     accuracy.append(best_acc)
 
     print(f"Training finished at: {(timing)} with accuracy: {best_acc}")
-    config.write_list_to_csv(config.trials, config.output_name + '_tim_acc', timings, accuracy)
+    config.write_list_to_csv(i + 1, config.output_name + '_tim_acc', timings, accuracy)
