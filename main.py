@@ -201,7 +201,8 @@ for i in range(config.trials):
     # Model
     best_acc = 0  # best test accuracy
     print('==> Building model..')
-    net = ResNet18(num_classes)
+    # net = ResNet18(num_classes)
+    net = SimpleDLA(num_classes=num_classes)
     net = net.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
