@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-dataset = 'CIFAR100'
-batch_size = 1024
-trials = 10
-EPOCHS = 200
+dataset = 'CIFAR10'
+batch_size = 256
+trials = 2
+EPOCHS = 50
 
 def plot(epoch_range, train, test, heading, extra = 1):
     epochs = range(1,epoch_range+1)

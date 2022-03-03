@@ -32,23 +32,39 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
+    batch_idx = 1
+    for item1, item2 in zip(trainloader1, trainloader2):
+        inputs1, targets1 = item1
+        inputs2, targets2 = item2
+    # for batch_idx, (inputs, targets) in enumerate(trainloader):
+        inputs1, targets1 = inputs1.to(device), targets1.to(device)
+        inputs2, targets2 = inputs2.to(device), targets2.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
+        outputs1 = net(inputs1)
+        loss = criterion(outputs1, targets1)
+        outputs2 = net(inputs2)
+        loss += criterion(outputs2, targets2)
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
+        # _, predicted = outputs1.max(1)
+        # total += targets1.size(0)
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        _, pred1 = outputs1.max(1)
+        total += targets1.size(0)
+
+        _, pred2 = outputs2.max(1)
+        total += targets2.size(0)
+
+        # correct += predicted.eq(targets).sum().item()
+        correct += pred1.eq(targets1).sum().item() + pred2.eq(targets2).sum().item()
+
+        progress_bar(batch_idx, len(trainloader1), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        batch_idx = batch_idx + 1
     acc = 100.*correct/total
-    train_loss /= len(trainloader.dataset)
+    train_loss /= len(trainloader1.dataset)
 
     return acc, train_loss
 
@@ -105,8 +121,20 @@ else:
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
+# transform_train = transforms.Compose([
+#     transforms.RandomCrop(32, padding=4),
+#     transforms.RandomHorizontalFlip(),
+#     transforms.ToTensor(),
+#     transforms.Normalize(mean, std),
+# ])
+
+transform_train_1 = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std),
+])
+
+transform_train_2 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize(mean, std),
@@ -119,28 +147,51 @@ transform_test = transforms.Compose([
 
 if config.dataset == 'CIFAR10':
     root = './data_cifar10'
-    trainset = torchvision.datasets.CIFAR10(
-        root=root, train=True, download=True, transform=transform_train)
+    # trainset = torchvision.datasets.CIFAR10(
+    #     root=root, train=True, download=True, transform=transform_train)
+    trainset1 = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform_train_1)
+
+    trainset2 = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform_train_2)
 
     testset = torchvision.datasets.CIFAR10(
         root=root, train=False, download=True, transform=transform_test)
 elif config.dataset == 'CIFAR100':
     root = './data_cifar100'
-    trainset = torchvision.datasets.CIFAR100(
-        root=root, train=True, download=True, transform=transform_train)
+    # trainset = torchvision.datasets.CIFAR100(
+    #     root=root, train=True, download=True, transform=transform_train)
+
+    trainset1 = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True, transform=transform_train_1)
+
+    trainset2 = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True, transform=transform_train_2)
 
     testset = torchvision.datasets.CIFAR100(
         root=root, train=False, download=True, transform=transform_test)
 else:
     root = './data_imagenet'
-    trainset = torchvision.datasets.ImageNet(
-        root=root, train=True, download=True, transform=transform_train)
+    # trainset = torchvision.datasets.ImageNet(
+    #     root=root, train=True, download=True, transform=transform_train)
+
+    trainset1 = torchvision.datasets.ImageNet(
+        root=root, train=True, download=True, transform=transform_train_1)
+
+    trainset2 = torchvision.datasets.ImageNet(
+        root=root, train=True, download=True, transform=transform_train_2)
 
     testset = torchvision.datasets.ImageNet(
         root=root, train=False, download=True, transform=transform_test)
 
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=config.batch_size, shuffle=True, num_workers=2)
+# trainloader = torch.utils.data.DataLoader(
+#     trainset, batch_size=config.batch_size, shuffle=True, num_workers=2)
+
+trainloader1 = torch.utils.data.DataLoader(
+    trainset1, batch_size=config.batch_size, shuffle=True, num_workers=2)
+
+trainloader2 = torch.utils.data.DataLoader(
+    trainset2, batch_size=config.batch_size, shuffle=True, num_workers=2)
 
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
