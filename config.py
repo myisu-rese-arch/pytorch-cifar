@@ -3,8 +3,8 @@ import pandas as pd
 
 dataset = 'CIFAR10'
 batch_size = 256
-trials = 2
-EPOCHS = 50
+trials = 10
+EPOCHS = 200
 
 def plot(epoch_range, train, test, heading, extra = 1):
     epochs = range(1,epoch_range+1)

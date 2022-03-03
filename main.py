@@ -234,12 +234,12 @@ for i in range(config.trials):
         test_loss.append(te_loss)
 
         scheduler.step()
-    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = i)
-    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = i)
+    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = "parallel" + str(i))
+    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = "parallel" + str(i))
 
     timing = time.time() - starttime
     timings.append(timing)
     accuracy.append(best_acc)
 
     print(f"Training finished at: {(timing)} with accuracy: {best_acc}")
-config.write_list_to_csv(config.trials, 'tim_acc', timings, accuracy)
+config.write_list_to_csv(config.trials, 'parallel_tim_acc', timings, accuracy)
