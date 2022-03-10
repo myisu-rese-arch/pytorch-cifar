@@ -17,15 +17,12 @@ import config as config
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument('--append', type=str, help='Name to append to file')
+parser.add_argument('--append', required=True, type=str, help='Name to append to file')
 parser.add_argument('--other', '-o', action='store_true',
                     help='Run other method')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 args = parser.parse_args()
-
-if args.other:
-    print("Others coming in")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -40,6 +37,7 @@ def train(epoch):
     total = 0
 
     if args.other:
+        print("Parallel training @@@@@@@@@@@@@@@@@@@@@@@@@@@")
         batch_idx = 1
         for item1, item2 in zip(trainloader1, trainloader2):
             inputs1, targets1 = item1
@@ -70,6 +68,7 @@ def train(epoch):
                  % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
             batch_idx = batch_idx + 1
     else:
+        print("Normal Training !!!!!!!!!!!!!!!!!!!!!!!")
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
 
@@ -252,6 +251,12 @@ for i in range(config.trials):
     train_acc, train_loss = [], []
     test_acc, test_loss = [], []
     for epoch in range(start_epoch, start_epoch+config.EPOCHS):
+
+        if epoch < config.finish_parallel_by:
+            args.other = True
+        else:
+            args.other = False
+
         tr_acc, tr_loss = train(epoch)
         train_acc.append(tr_acc)
         train_loss.append(tr_loss)
@@ -261,12 +266,23 @@ for i in range(config.trials):
         test_loss.append(te_loss)
 
         scheduler.step()
-    config.plot(config.EPOCHS, train_acc, test_acc, 'Accuracy', extra = args.append + str(i))
-    config.plot(config.EPOCHS, train_loss, test_loss, 'Loss', extra = args.append + str(i))
+
+    dictionary = {'epochs': range(1,config.EPOCHS+1),
+                    'Train Acc': train_acc,
+                    'Test Acc': test_acc,
+                    "Train Loss": train_loss,
+                    "Test Loss": test_loss
+                    }
+    config.write_list_to_csv(dictionary, args.append + 'loss_acc_' + str(i))
 
     timing = time.time() - starttime
     timings.append(timing)
     accuracy.append(best_acc)
 
+    dictionary = {'epochs': range(0,i+1),
+            'Timings': timings,
+            'Accuracy': accuracy
+            }
+
     print(f"Training finished at: {(timing)} with accuracy: {best_acc}")
-    config.write_list_to_csv(i + 1, args.append + '_tim_acc', timings, accuracy)
+    config.write_list_to_csv(dictionary, args.append + '_tim_acc')
